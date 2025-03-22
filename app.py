@@ -1,3 +1,5 @@
+import os
+import uuid
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,14 +9,18 @@ app.secret_key = 'your_secret_key_here'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 db = SQLAlchemy(app)
 
+if not os.path.exists('static'):
+    os.makedirs('static')
+
+if not os.path.exists('instance'):
+    os.makedirs('instance')
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
-    name = db.Column(db.String(80), nullable=True)
-    email = db.Column(db.String(120), nullable=True)
-    fitness_goal = db.Column(db.String(200), nullable=True)
+    profile_picture = db.Column(db.String(120), default='pfp_placeholder.png')
 
 class Activity(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -29,7 +35,6 @@ class Goal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     target_distance = db.Column(db.Float, nullable=False)
-    target_date = db.Column(db.String(20), nullable=False)
     progress = db.Column(db.Float, default=0)
 
 with app.app_context():
@@ -70,10 +75,9 @@ def login():
         username = request.form['username']
         password = request.form['password']
 
-        # Check if the user exists
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            session['user_id'] = user.id  # Store user ID in session
+            session['user_id'] = user.id
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
         else:
@@ -94,9 +98,23 @@ def dashboard():
         return redirect(url_for('login'))
 
     user = User.query.get(session['user_id'])
-    return render_template('dashboard.html', username=user.username)
 
-@app.route('/profile', methods=['GET', 'POST'])
+    goal = Goal.query.filter_by(user_id=session['user_id']).first()
+
+    progress = 0
+    progress_percentage = 0
+    if goal:
+        activities = Activity.query.filter_by(user_id=session['user_id']).all()
+        progress = sum(activity.distance for activity in activities if activity.distance)
+        progress_percentage = (progress / goal.target_distance) * 100 if goal.target_distance else 0
+
+    return render_template('dashboard.html', 
+                           username=user.username, 
+                           goal=goal, 
+                           progress=progress, 
+                           progress_percentage=progress_percentage)
+
+@app.route('/profile')
 def profile():
     if 'user_id' not in session:
         flash('Please login to access your profile.', 'error')
@@ -104,15 +122,17 @@ def profile():
 
     user = User.query.get(session['user_id'])
 
-    if request.method == 'POST':
-        user.name = request.form['name']
-        user.email = request.form['email']
-        user.fitness_goal = request.form['fitness_goal']
-        db.session.commit()
-        flash('Profile updated successfully!', 'success')
-        return redirect(url_for('profile'))
+    activities = Activity.query.filter_by(user_id=session['user_id']).all()
+    total_run = sum(activity.distance for activity in activities if activity.type == 'running' and activity.distance)
+    total_bicycle = sum(activity.distance for activity in activities if activity.type == 'cycling' and activity.distance)
+    total_gym = sum(activity.duration for activity in activities if activity.type == 'gym' and activity.duration) / 60
 
-    return render_template('profile.html', user=user)
+    return render_template('profile.html', 
+                           username=user.username, 
+                           total_run=total_run, 
+                           total_bicycle=total_bicycle, 
+                           total_gym=total_gym,
+                           user=user)
 
 @app.route('/log_activity', methods=['GET', 'POST'])
 def log_activity():
@@ -123,9 +143,12 @@ def log_activity():
     if request.method == 'POST':
         activity_type = request.form['type']
         duration = request.form['duration']
-        distance = request.form.get('distance', 0)
-        calories = request.form.get('calories', 0)
+        distance = request.form.get('distance', '')
+        calories = request.form.get('calories', '')
         date = request.form['date']
+
+        distance = float(distance) if distance else None
+        calories = float(calories) if calories else None
 
         new_activity = Activity(
             user_id=session['user_id'],
@@ -142,7 +165,6 @@ def log_activity():
         return redirect(url_for('dashboard'))
 
     return render_template('log_activity.html')
-
 
 @app.route('/activity_history')
 def activity_history():
@@ -167,7 +189,7 @@ def delete_activity(activity_id):
     else:
         flash('Activity not found or you do not have permission to delete it.', 'error')
 
-    return redirect(url_for('activity_history'))
+    return redirect(url_for('data'))
 
 @app.route('/activity_data')
 def activity_data():
@@ -175,12 +197,18 @@ def activity_data():
         return jsonify({'error': 'Not logged in'}), 401
 
     activities = Activity.query.filter_by(user_id=session['user_id']).all()
-    data = {
-        'dates': [activity.date for activity in activities],
-        'distances': [activity.distance for activity in activities],
-        'calories': [activity.calories for activity in activities]
-    }
-    return jsonify(data)
+
+    activity_data = []
+    for activity in activities:
+        activity_data.append({
+            'type': activity.type,
+            'duration': activity.duration,
+            'distance': activity.distance if activity.distance else 'N/A',
+            'calories': activity.calories if activity.calories else 'N/A',
+            'date': activity.date
+        })
+
+    return jsonify({'activities': activity_data})
 
 @app.route('/set_goal', methods=['GET', 'POST'])
 def set_goal():
@@ -189,21 +217,62 @@ def set_goal():
         return redirect(url_for('login'))
 
     if request.method == 'POST':
-        target_distance = request.form['target_distance']
-        target_date = request.form['target_date']
+        target_distance = float(request.form['target_distance'])
 
-        new_goal = Goal(
-            user_id=session['user_id'],
-            target_distance=target_distance,
-            target_date=target_date
-        )
-        db.session.add(new_goal)
+        existing_goal = Goal.query.filter_by(user_id=session['user_id']).first()
+        if existing_goal:
+            existing_goal.target_distance = target_distance
+            existing_goal.progress = 0 
+        else:
+            new_goal = Goal(user_id=session['user_id'], target_distance=target_distance)
+            db.session.add(new_goal)
+
         db.session.commit()
-
         flash('Goal set successfully!', 'success')
         return redirect(url_for('dashboard'))
 
     return render_template('set_goal.html')
+
+@app.route('/data')
+def data():
+    if 'user_id' not in session:
+        flash('Please login to view your data.', 'error')
+        return redirect(url_for('login'))
+
+    activities = Activity.query.filter_by(user_id=session['user_id']).all()
+
+    running_activities = [activity for activity in activities if activity.type == 'running']
+    cycling_activities = [activity for activity in activities if activity.type == 'cycling']
+    gym_activities = [activity for activity in activities if activity.type == 'gym']
+
+    return render_template('data.html', 
+                           running_activities=running_activities, 
+                           cycling_activities=cycling_activities, 
+                           gym_activities=gym_activities)
+
+@app.route('/upload_profile_picture', methods=['POST'])
+def upload_profile_picture():
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    if 'profile_picture' not in request.files:
+        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+
+    file = request.files['profile_picture']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+    filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
+    filepath = os.path.join('static', filename)
+    file.save(filepath)
+
+    user = User.query.get(session['user_id'])
+    user.profile_picture = filename
+    db.session.commit()
+
+    return jsonify({'success': True, 'filename': filename})
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
