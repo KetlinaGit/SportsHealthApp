@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #b37aff, #6f42c1);
+            display: flex;
+            height: 100vh;
+            margin: 0;
+        }
+        .sidebar {
+            width: 250px;
+            background: white;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .sidebar h3 {
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+        .menu {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .menu a {
+            text-decoration: none;
+            color: #333;
+            padding: 0.8rem;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            transition: background 0.3s;
+        }
+        .menu a:hover {
+            background: #f3f3f3;
+        }
+        .menu a.active {
+            background: #6f42c1;
+            color: white;
+        }
+        .logout {
+            margin-top: auto;
+            color: #dc3545;
+        }
+        .main-content {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .header h2 {
+            font-weight: 700;
+        }
+        .btn {
+            background: black;
+            color: white;
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            transition: opacity 0.3s;
+        }
+        .btn:hover {
+            opacity: 0.8;
+        }
+        .chart-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        #histogram {
+            max-width: 100%;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        th, td {
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background: #6f42c1;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .btn.delete {
+            background: #dc3545;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn.delete:hover {
+            opacity: 0.8;
+        }
+        .activity-section {
+            margin-bottom: 2rem;
+        }
+        .activity-section h3 {
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #333;
+        }
+        table th:nth-child(1),
+        table td:nth-child(1) {
+            width: 20%;
+        }
+        table th:nth-child(2),
+        table td:nth-child(2) {
+            width: 20%;
+        }
+        table th:nth-child(3),
+        table td:nth-child(3) {
+            width: 30%;
+        }
+        table th:nth-child(4),
+        table td:nth-child(4) {
+            width: 20%;
+        }
+        table th:nth-child(5),
+        table td:nth-child(5) {
+            width: 10%;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h3>Dashboard</h3>
+        <div class="menu">
+            <a href="{{ url_for('dashboard') }}">Home</a>
+            <a href="{{ url_for('profile') }}">Profile</a>
+            <a href="{{ url_for('data') }}" class="active">Data</a>
+            <a href="{{ url_for('logout') }}" class="logout">Logout</a>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h2>Data Overview</h2>
+            <a href="{{ url_for('log_activity') }}" class="btn">Log Activity</a>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="histogram"></canvas>
+        </div>
+
+        <div class="activity-section">
+            <h3>Running Activities</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Duration (mins)</th>
+                        <th>Distance (km)</th>
+                        <th>Calories</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for activity in running_activities %}
+                    <tr>
+                        <td>{{ activity.duration }}</td>
+                        <td>{{ activity.distance }}</td>
+                        <td>{{ activity.calories }}</td>
+                        <td>{{ activity.date }}</td>
+                        <td class="actions">
+                            <form action="{{ url_for('delete_activity', activity_id=activity.id) }}" method="POST" style="display: inline;">
+                                <button type="submit" class="btn delete">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="activity-section">
+            <h3>Cycling Activities</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Duration (mins)</th>
+                        <th>Distance (km)</th>
+                        <th>Calories</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for activity in cycling_activities %}
+                    <tr>
+                        <td>{{ activity.duration }}</td>
+                        <td>{{ activity.distance }}</td>
+                        <td>{{ activity.calories }}</td>
+                        <td>{{ activity.date }}</td>
+                        <td class="actions">
+                            <form action="{{ url_for('delete_activity', activity_id=activity.id) }}" method="POST" style="display: inline;">
+                                <button type="submit" class="btn delete">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="activity-section">
+            <h3>Gym Activities</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Duration (mins)</th>
+                        <th>Calories</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for activity in gym_activities %}
+                    <tr>
+                        <td>{{ activity.duration }}</td>
+                        <td>{{ activity.calories }}</td>
+                        <td>{{ activity.date }}</td>
+                        <td class="actions">
+                            <form action="{{ url_for('delete_activity', activity_id=activity.id) }}" method="POST" style="display: inline;">
+                                <button type="submit" class="btn delete">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const ctx = document.getElementById('histogram').getContext('2d');
+
+            fetch('/activity_data')
+                .then(response => response.json())
+                .then(data => {
+                    const activities = data.activities;
+
+                    const totalRun = activities
+                        .filter(activity => activity.type === 'running' && activity.distance)
+                        .reduce((sum, activity) => sum + activity.distance, 0);
+
+                    const totalBicycle = activities
+                        .filter(activity => activity.type === 'cycling' && activity.distance)
+                        .reduce((sum, activity) => sum + activity.distance, 0);
+
+                    const totalGym = activities
+                        .filter(activity => activity.type === 'gym' && activity.duration)
+                        .reduce((sum, activity) => sum + activity.duration, 0) / 60;
+
+                    const sortedData = [
+                        { label: 'Running (km)', value: totalRun },
+                        { label: 'Cycling (km)', value: totalBicycle },
+                        { label: 'Gym (hrs)', value: totalGym }
+                    ].sort((a, b) => b.value - a.value);
+
+                    const labels = sortedData.map(item => item.label);
+                    const values = sortedData.map(item => item.value);
+
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Total Distance/Time',
+                                data: values,
+                                backgroundColor: [
+                                    'rgba(255, 99, 132, 0.6)',
+                                    'rgba(54, 162, 235, 0.6)',
+                                    'rgba(75, 192, 192, 0.6)'
+                                ],
+                                borderColor: [
+                                    'rgba(255, 99, 132, 1)',
+                                    'rgba(54, 162, 235, 1)',
+                                    'rgba(75, 192, 192, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    title: {
+                                        display: true,
+                                        text: 'Value'
+                                    }
+                                },
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: 'Activity Type'
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            }
+                        }
+                    });
+                });
+        });
+    </script>
+
+</body>
+</html>
